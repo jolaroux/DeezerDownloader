@@ -29,28 +29,28 @@ var readline = require('readline-sync');
 
 
 
-
-//variables 
-var scopes = ['user-read-private', 'user-read-email'],
-    redirectUri = 'http://localhost:8888/callback',
-    clientId = '5ddacffa892542a08bd9927c226dad43',
-    clientSecret = '45b90caa6aae43ddbd969bdc3982f5b4',
-    state = 'some-state-of-my-choice',
-    accessCode = ''.
-    refreshCode = '';
-
-//credentials for creation 
-var credentials = {
-    clientId : clientId,
-    clientSecret : clientSecret,
-    redirectUri : redirectUri
-}
-
-//temp code that was returned 
-var code = ''
-
-// creating the wrapper app 
-var spotifyApi = new SpotifyWebApi(credentials);
+// 
+// //variables 
+// var scopes = ['user-read-private', 'user-read-email'],
+//     redirectUri = 'http://localhost:8888/callback',
+//     clientId = '5ddacffa892542a08bd9927c226dad43',
+//     clientSecret = '45b90caa6aae43ddbd969bdc3982f5b4',
+//     state = 'some-state-of-my-choice',
+//     accessCode = '',
+//     refreshCode = '';
+// 
+// //credentials for creation 
+// var credentials = {
+//     clientId : clientId,
+//     clientSecret : clientSecret,
+//     redirectUri : redirectUri
+// }
+// 
+// //temp code that was returned 
+// var code = ''
+// 
+// // creating the wrapper app 
+// var spotifyApi = new SpotifyWebApi(credentials);
 
 
 
@@ -63,274 +63,274 @@ var spotifyApi = new SpotifyWebApi(credentials);
 ██       ██████  ██   ████  ██████    ██    ██  ██████  ██   ████ ███████
 */
 
-
-//checking if the data file for spotify cred info exists 
-function checkSpotifyDataFile(callback) {
-  //checking file exists 
-  fs.existsSync('spotifyData.json') ? loadSpotifyData(callback) : createSpotifyData()
-}
-
-//for when running for the first time 
-//creating spotify data 
-function createSpotifyData() {
-
-  //get and print the url 
-  // Create the authorization URL
-  var authorizeURL = spotifyApi.createAuthorizeURL(scopes, state);
-
-  //console log url 
-  console.log("The authorization URL is: \n")
-  console.log(authorizeURL)
-  console.log("\n")
-
-  //starting the server 
-  var server = http.createServer(function(request, response) {
-    //responding on the page
-    response.writeHead(200, {"Content-Type": "text/plain"});
-    response.write("Thanks for authorizing, James!");
-
-    //parsing the request url to get the code 
-    //getting the url from request 
-    //getting query from url 
-    var queryData = url.parse(request.url, true).query;
-
-    //getting code data from queryData
-    code = queryData.code
-    // console.log("\n\n" + code + "\n\n" )
-
-    //need to get access and refresh codes with our new code 
-    // Retrieve an access token and a refresh token
-    spotifyApi.authorizationCodeGrant(code)
-      .then(function(data) {
-        // console.log('The token expires in ' + data.body['expires_in']);
-        // console.log('The access token is ' + data.body['access_token']);
-        // console.log('The refresh token is ' + data.body['refresh_token']);
-
-        // Set the access token on the API object to use it in later calls
-        spotifyApi.setAccessToken(data.body['access_token']);
-        spotifyApi.setRefreshToken(data.body['refresh_token']);
-
-        //storing access and refresh codes 
-        accessCode = data.body['access_token']
-        refreshCode = data.body['refresh_token']
-
-        //writing to file 
-        //storing in JSON
-        var dataObject = JSON.stringify({accessCode : accessCode, refreshCode : refreshCode})
-        fs.writeFile( "spotifyData.json", dataObject, "utf8", function(err) {
-          if (!err) {
-            console.log("\nSaved successfully\n")
-
-          } else {
-            console.log("\nNot saved successfully!\n")
-          }
-
-          //shutting down either way 
-          // Shutting down! run again
-          server.shutdown(function() {
-            console.log('Everything is cleanly shutdown.');
-            console.log("Run again!")
-          });
-
-        } );
-
-
-      }, function(err) {
-        console.log('Something went wrong!', err);
-      });
-
-    response.end();
-    //and close the server either way 
-    // server.close()
-
-
-  })
-
-  //for shutting down 
-  server = require('http-shutdown')(server);
-
-  //listening server 
-  server.listen(8888)
-
-}
-
-
-//if it's already been run, load the data from the file 
-function loadSpotifyData(callback) {
-  // reading the saved spotify data 
-  var spotData = require("./spotifyData.json");
-
-  //data is already parsed 
-  //read and store
-  accessCode = spotData.accessCode
-  refreshCode = spotData.refreshCode
-
-  //set 
-  spotifyApi.setAccessToken(accessCode);
-  spotifyApi.setRefreshToken(refreshCode);
-
-  //refreshing codes 
-  // clientId, clientSecret and refreshToken has been set on the api object previous to this call.
-  spotifyApi.refreshAccessToken()
-    .then(function(data) {
-      console.log('The access token has been refreshed!');
-
-      // Save the access token so that it's used in future calls
-      spotifyApi.setAccessToken(data.body['access_token']);
-
-      //callback 
-      callback && callback()
-    }, function(err) {
-      console.log('Could not refresh access token', err);
-    });
-}
-
-
-//this function handles paging through all of the spotify api returns with 100 songs each
-function getSongsHandler(tracksObj, user, id, index, max, callback, callbackFailure) {
-  // Get tracks in a playlist from the index 
-  spotifyApi.getPlaylistTracks(user, id, { 'offset' : index, 'fields' : 'items' })
-    .then(function(data) {
-      //push array to tracksObj
-      for (let song of data.body.items) {
-        tracksObj.push(song)
-      }
-
-      //return through callback if index >= max
-      if (index >= max) {
-        callback && callback(tracksObj)
-      } else {
-        //if the index < max there's still songs 
-        //increment index and call function song 
-        index += 100
-        //call this function again 
-        getSongsHandler(tracksObj, user, id, index, max, callback, callbackFailure)
-
-      }
-
-
-    }, function(err) {
-      console.log('Something went wrong! in getSongsHandler', err);
-
-      //callback failure 
-      //if no playlist edm for some reason 
-      //unncomment 
-      callbackFailure && callbackFailure(err)
-    });
-
-}
-
-//processing converting all the song objects to the string to search deezer with 
-function handleSongStrings(tracksObj) {
-
-
-  //variables 
-  //array of songs + artists 
-  var songsArr = []
-
-  for (var i = 0; i < tracksObj.length; i++) {
-    // console.log(tracksObj[i])
-    var tempSearchName = ""
-    //getting the two artist names 
-    //storing temporarily 
-    var tempArtistName = "";
-    //need to loop through them 
-    for (let iter of tracksObj[i].track.artists) {
-      tempArtistName = tempArtistName.concat(iter.name + " ") 
-    }
-    
-    //temp edited name to remove unicode characters 
-    var tempEditedName = tracksObj[i].track.name + " " + tempArtistName
-    tempEditedName = tempEditedName.replace(/["“‘”’’]/g, "'");
-    tempEditedName = removeAccents.remove(tempEditedName)
-    console.log(tempEditedName)
-
-    //temp object that holds both normal song name and edited song name 
-    var tempObj = {rawSongName: tracksObj[i].track.name, editedSongName: tempEditedName}
-
-    //pushing to songsArr
-    songsArr.push(tempObj)
-
-  }
-  
-    return songsArr;
-
-}
-
-//get playlist specified in argument from user 
-function getPlaylist(user, playlistName, callback) {
-
-    //variables for this function 
-    //id of the playlist 
-    var playlistID;
-    //how many songs there are, to page through them 
-    var songCount;
-    //the raw objects of individual tracks from the playlist
-    var trackObjects = [];
-
-    // Get my playlists user jolaroux
-    spotifyApi.getUserPlaylists(user)
-      .then(function(data) {
-        // console.log('Retrieved playlists', data.body.items);
-        // console.log(data.body.items.length)
-
-        //get ID of playlist EDM
-        for (let playlist of data.body.items) {
-          //if it's the right playlist 
-          if (playlist.name == playlistName) {
-            //have the id of playlist now
-            playlistID = playlist.id
-            //have song count too 
-            songCount = playlist.tracks.total
-            console.log(songCount + " songs in playlist " + playlistName)
-
-          }
-        }
-
-
-        //getting tracks in playlist
-        //need to loop through songCount and call get100Songs until the playlist empty 
-        var index = 0;
-        //storing the song objects strings of song + artist
-        var songObjects = [];
-        //tracksObj, user, id, index, max, callback, callbackFailure
-        getSongsHandler(trackObjects, user, playlistID, index, songCount, 
-
-          //callback success
-          function(trackObjects) {
-
-            //formatting the strings to search deezer 
-            songObjects = handleSongStrings(trackObjects)
-
-            //printing for now 
-            // for (let o of songObjects) {
-            //   console.log(o)
-            // }
-            writeTo(songObjects, './spotifySongs.json')
-
-            //pass back through callback 
-            callback && callback(songObjects)
-
-          }, 
-
-          //callback failure
-          function (err) {
-            console.log(err)
-          }
-        )
-
-
-      },function(err) {
-        console.log('Something went wrong!', err);
-
-        //callback failure 
-        //if no playlist edm for some reason 
-        //unncomment 
-        callbackFailure && callbackFailure()
-
-      });
-
-}
+// 
+// //checking if the data file for spotify cred info exists 
+// function checkSpotifyDataFile(callback) {
+//   //checking file exists 
+//   fs.existsSync('spotifyData.json') ? loadSpotifyData(callback) : createSpotifyData()
+// }
+// 
+// //for when running for the first time 
+// //creating spotify data 
+// function createSpotifyData() {
+// 
+//   //get and print the url 
+//   // Create the authorization URL
+//   var authorizeURL = spotifyApi.createAuthorizeURL(scopes, state);
+// 
+//   //console log url 
+//   console.log("The authorization URL is: \n")
+//   console.log(authorizeURL)
+//   console.log("\n")
+// 
+//   //starting the server 
+//   var server = http.createServer(function(request, response) {
+//     //responding on the page
+//     response.writeHead(200, {"Content-Type": "text/plain"});
+//     response.write("Thanks for authorizing, James!");
+// 
+//     //parsing the request url to get the code 
+//     //getting the url from request 
+//     //getting query from url 
+//     var queryData = url.parse(request.url, true).query;
+// 
+//     //getting code data from queryData
+//     code = queryData.code
+//     // console.log("\n\n" + code + "\n\n" )
+// 
+//     //need to get access and refresh codes with our new code 
+//     // Retrieve an access token and a refresh token
+//     spotifyApi.authorizationCodeGrant(code)
+//       .then(function(data) {
+//         // console.log('The token expires in ' + data.body['expires_in']);
+//         // console.log('The access token is ' + data.body['access_token']);
+//         // console.log('The refresh token is ' + data.body['refresh_token']);
+// 
+//         // Set the access token on the API object to use it in later calls
+//         spotifyApi.setAccessToken(data.body['access_token']);
+//         spotifyApi.setRefreshToken(data.body['refresh_token']);
+// 
+//         //storing access and refresh codes 
+//         accessCode = data.body['access_token']
+//         refreshCode = data.body['refresh_token']
+// 
+//         //writing to file 
+//         //storing in JSON
+//         var dataObject = JSON.stringify({accessCode : accessCode, refreshCode : refreshCode})
+//         fs.writeFile( "spotifyData.json", dataObject, "utf8", function(err) {
+//           if (!err) {
+//             console.log("\nSaved successfully\n")
+// 
+//           } else {
+//             console.log("\nNot saved successfully!\n")
+//           }
+// 
+//           //shutting down either way 
+//           // Shutting down! run again
+//           server.shutdown(function() {
+//             console.log('Everything is cleanly shutdown.');
+//             console.log("Run again!")
+//           });
+// 
+//         } );
+// 
+// 
+//       }, function(err) {
+//         console.log('Something went wrong!', err);
+//       });
+// 
+//     response.end();
+//     //and close the server either way 
+//     // server.close()
+// 
+// 
+//   })
+// 
+//   //for shutting down 
+//   server = require('http-shutdown')(server);
+// 
+//   //listening server 
+//   server.listen(8888)
+// 
+// }
+// 
+// 
+// //if it's already been run, load the data from the file 
+// function loadSpotifyData(callback) {
+//   // reading the saved spotify data 
+//   var spotData = require("./spotifyData.json");
+// 
+//   //data is already parsed 
+//   //read and store
+//   accessCode = spotData.accessCode
+//   refreshCode = spotData.refreshCode
+// 
+//   //set 
+//   spotifyApi.setAccessToken(accessCode);
+//   spotifyApi.setRefreshToken(refreshCode);
+// 
+//   //refreshing codes 
+//   // clientId, clientSecret and refreshToken has been set on the api object previous to this call.
+//   spotifyApi.refreshAccessToken()
+//     .then(function(data) {
+//       console.log('The access token has been refreshed!');
+// 
+//       // Save the access token so that it's used in future calls
+//       spotifyApi.setAccessToken(data.body['access_token']);
+// 
+//       //callback 
+//       callback && callback()
+//     }, function(err) {
+//       console.log('Could not refresh access token', err);
+//     });
+// }
+// 
+// 
+// //this function handles paging through all of the spotify api returns with 100 songs each
+// function getSongsHandler(tracksObj, user, id, index, max, callback, callbackFailure) {
+//   // Get tracks in a playlist from the index 
+//   spotifyApi.getPlaylistTracks(user, id, { 'offset' : index, 'fields' : 'items' })
+//     .then(function(data) {
+//       //push array to tracksObj
+//       for (let song of data.body.items) {
+//         tracksObj.push(song)
+//       }
+// 
+//       //return through callback if index >= max
+//       if (index >= max) {
+//         callback && callback(tracksObj)
+//       } else {
+//         //if the index < max there's still songs 
+//         //increment index and call function song 
+//         index += 100
+//         //call this function again 
+//         getSongsHandler(tracksObj, user, id, index, max, callback, callbackFailure)
+// 
+//       }
+// 
+// 
+//     }, function(err) {
+//       console.log('Something went wrong! in getSongsHandler', err);
+// 
+//       //callback failure 
+//       //if no playlist edm for some reason 
+//       //unncomment 
+//       callbackFailure && callbackFailure(err)
+//     });
+// 
+// }
+// 
+// //processing converting all the song objects to the string to search deezer with 
+// function handleSongStrings(tracksObj) {
+// 
+// 
+//   //variables 
+//   //array of songs + artists 
+//   var songsArr = []
+// 
+//   for (var i = 0; i < tracksObj.length; i++) {
+//     // console.log(tracksObj[i])
+//     var tempSearchName = ""
+//     //getting the two artist names 
+//     //storing temporarily 
+//     var tempArtistName = "";
+//     //need to loop through them 
+//     for (let iter of tracksObj[i].track.artists) {
+//       tempArtistName = tempArtistName.concat(iter.name + " ") 
+//     }
+// 
+//     //temp edited name to remove unicode characters 
+//     var tempEditedName = tracksObj[i].track.name + " " + tempArtistName
+//     tempEditedName = tempEditedName.replace(/["“‘”’’]/g, "'");
+//     tempEditedName = removeAccents.remove(tempEditedName)
+//     console.log(tempEditedName)
+// 
+//     //temp object that holds both normal song name and edited song name 
+//     var tempObj = {rawSongName: tracksObj[i].track.name, editedSongName: tempEditedName}
+// 
+//     //pushing to songsArr
+//     songsArr.push(tempObj)
+// 
+//   }
+// 
+//     return songsArr;
+// 
+// }
+// 
+// //get playlist specified in argument from user 
+// function getPlaylist(user, playlistName, callback) {
+// 
+//     //variables for this function 
+//     //id of the playlist 
+//     var playlistID;
+//     //how many songs there are, to page through them 
+//     var songCount;
+//     //the raw objects of individual tracks from the playlist
+//     var trackObjects = [];
+// 
+//     // Get my playlists user jolaroux
+//     spotifyApi.getUserPlaylists(user)
+//       .then(function(data) {
+//         // console.log('Retrieved playlists', data.body.items);
+//         // console.log(data.body.items.length)
+// 
+//         //get ID of playlist EDM
+//         for (let playlist of data.body.items) {
+//           //if it's the right playlist 
+//           if (playlist.name == playlistName) {
+//             //have the id of playlist now
+//             playlistID = playlist.id
+//             //have song count too 
+//             songCount = playlist.tracks.total
+//             console.log(songCount + " songs in playlist " + playlistName)
+// 
+//           }
+//         }
+// 
+// 
+//         //getting tracks in playlist
+//         //need to loop through songCount and call get100Songs until the playlist empty 
+//         var index = 0;
+//         //storing the song objects strings of song + artist
+//         var songObjects = [];
+//         //tracksObj, user, id, index, max, callback, callbackFailure
+//         getSongsHandler(trackObjects, user, playlistID, index, songCount, 
+// 
+//           //callback success
+//           function(trackObjects) {
+// 
+//             //formatting the strings to search deezer 
+//             songObjects = handleSongStrings(trackObjects)
+// 
+//             //printing for now 
+//             // for (let o of songObjects) {
+//             //   console.log(o)
+//             // }
+//             writeTo(songObjects, './spotifySongs.json')
+// 
+//             //pass back through callback 
+//             callback && callback(songObjects)
+// 
+//           }, 
+// 
+//           //callback failure
+//           function (err) {
+//             console.log(err)
+//           }
+//         )
+// 
+// 
+//       },function(err) {
+//         console.log('Something went wrong!', err);
+// 
+//         //callback failure 
+//         //if no playlist edm for some reason 
+//         //unncomment 
+//         callbackFailure && callbackFailure()
+// 
+//       });
+// 
+// }
 
 
 //writes array to file sent
@@ -514,7 +514,13 @@ function handleDeezer(songs) {
       }
 
       //writing to the file!
-      fs.writeFile("DeezerDownloadLinks.txt", largeString, 'utf8',  function(err) {
+      // 
+      // you are the biggest retard on the planet
+      // you need to write the right file you fucking idiot 
+      // like really did you need this explained to you 
+      // i hate you so much 
+      fs.writeFile("./SMLoadr/downloadLinks.txt", largeString, 'utf8',  function(err) {
+        console.log(largeString)
         if (err) {
           console.log(err)
         }
@@ -574,10 +580,17 @@ function handleDeezer(songs) {
 //if it doesn't then it's created and saved and if it does it's loaded 
 //call the next function with callback
 //UNCOMMENT
-checkSpotifyDataFile(function() {
+
+//testing with spotify class
+//importing 
+const HandleSpotify = require('./spotify.js') 
+const spotifyHandler = new HandleSpotify()
+
+
+spotifyHandler.checkSpotifyDataFile(function() {
 
     //getting the playlist xxx 
-    getPlaylist('jolaroux', /*'rap'*/ 'EDM', function(songsArr) {
+    spotifyHandler.getPlaylist('jolaroux', /*'rap'*/ 'rap', function(songsArr) {
       //callback success with array of edited songs 
       handleDeezer(songsArr)
     })
